@@ -1,74 +1,98 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"time"
+	"sync"
+)
 
-	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/mem"
+type Client chan string
+
+var (
+	clientsMu sync.Mutex
+	clients   = make(map[Client]bool)
 )
 
 func main() {
 	http.HandleFunc("/events", sseHandler)
+	http.HandleFunc("/publish", publishHandler)
 
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("unable to start server: %s", err.Error())
-	}
+	log.Println("Listening on :8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 func sseHandler(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	// Headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	w.Header().Set("Access-Control-Allow-Origin", "*") // * For local
+	client := make(Client)
 
-	memT := time.NewTicker(time.Second)
-	defer memT.Stop()
+	// Add client
+	clientsMu.Lock()
+	clients[client] = true
+	clientsMu.Unlock()
 
-	cpuT := time.NewTicker(time.Second)
-	defer cpuT.Stop()
+	// Remove client on close
+	notify := w.(http.CloseNotifier).CloseNotify()
+	go func() {
+		<-notify
+		clientsMu.Lock()
+		delete(clients, client)
+		clientsMu.Unlock()
+		close(client)
+	}()
 
-	clientGone := r.Context().Done()
+	// Listen for messages
+	for msg := range client {
+		fmt.Fprintf(w, "data: %s\n\n", msg)
+		flusher.Flush()
+	}
+}
 
-	rc := http.NewResponseController(w)
+func publishHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Use POST", http.StatusMethodNotAllowed)
+		return
+	}
 
-	for {
+	var payload map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Convert to JSON string for broadcasting
+	data, err := json.Marshal(payload)
+	if err != nil {
+		http.Error(w, "Error encoding data", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println("payload", string(data))
+
+	// Send to all clients
+	clientsMu.Lock()
+	for client := range clients {
 		select {
-		case <-clientGone:
-			fmt.Println("Client has disconnected")
-			return
-		case <-memT.C:
-			m, err := mem.VirtualMemory()
-			if err != nil {
-				log.Printf("Unable to get mem: %s", err.Error())
-				return
-			}
-
-			if _, err := fmt.Fprintf(w, "event:mem\ndata:Total: %d, Used: %d, Perc: %.2f%%\n\n",
-				m.Total, m.Used, m.UsedPercent); err != nil {
-				log.Printf("unable to write: %s", err.Error())
-				return
-			}
-
-			rc.Flush()
-
-		case <-cpuT.C:
-			c, err := cpu.Times(false)
-			if err != nil {
-				log.Printf("Unable to get cpu: %s", err.Error())
-				return
-			}
-
-			if _, err := fmt.Fprintf(w, "event:cpu\ndata:User: %.2f, Sys: %.2f, Idle: %.2f\n\n",
-				c[0].User, c[0].System, c[0].Idle); err != nil {
-				log.Printf("unable to write: %s", err.Error())
-				return
-			}
-
-			rc.Flush()
+		case client <- string(data):
+		default:
+			// if client is slow or closed
+			delete(clients, client)
+			close(client)
 		}
 	}
+	clientsMu.Unlock()
+
+	w.WriteHeader(http.StatusNoContent)
 }

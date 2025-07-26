@@ -10,57 +10,74 @@ import (
 
 type Client chan string
 
-var (
+type SSEServer struct {
+	clients   map[Client]bool
 	clientsMu sync.Mutex
-	clients   = make(map[Client]bool)
-)
-
-func main() {
-	http.HandleFunc("/events", sseHandler)
-	http.HandleFunc("/publish", publishHandler)
-
-	log.Println("Listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func sseHandler(w http.ResponseWriter, r *http.Request) {
+func NewSSEServer() *SSEServer {
+	return &SSEServer{
+		clients: make(map[Client]bool),
+	}
+}
+
+func (s *SSEServer) AddClient(c Client) {
+	s.clientsMu.Lock()
+	defer s.clientsMu.Unlock()
+	s.clients[c] = true
+}
+
+func (s *SSEServer) RemoveClient(c Client) {
+	s.clientsMu.Lock()
+	defer s.clientsMu.Unlock()
+	delete(s.clients, c)
+	close(c)
+}
+
+func (s *SSEServer) Broadcast(msg string) {
+	s.clientsMu.Lock()
+	defer s.clientsMu.Unlock()
+	for client := range s.clients {
+		select {
+		case client <- msg:
+		default:
+			delete(s.clients, client)
+			close(client)
+		}
+	}
+}
+
+func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
 		return
 	}
 
-	// Headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	client := make(Client)
+	client := make(Client, 10)
+	s.AddClient(client)
 
-	// Add client
-	clientsMu.Lock()
-	clients[client] = true
-	clientsMu.Unlock()
-
-	// Remove client on close
-	notify := w.(http.CloseNotifier).CloseNotify()
+	ctx := r.Context()
 	go func() {
-		<-notify
-		clientsMu.Lock()
-		delete(clients, client)
-		clientsMu.Unlock()
-		close(client)
+		<-ctx.Done()
+		s.RemoveClient(client)
 	}()
 
-	// Listen for messages
 	for msg := range client {
-		fmt.Fprintf(w, "data: %s\n\n", msg)
+		_, err := fmt.Fprintf(w, "data: %s\n\n", msg)
+		if err != nil {
+			break
+		}
 		flusher.Flush()
 	}
 }
 
-func publishHandler(w http.ResponseWriter, r *http.Request) {
+func (s *SSEServer) HandlePublish(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Use POST", http.StatusMethodNotAllowed)
 		return
@@ -72,27 +89,24 @@ func publishHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert to JSON string for broadcasting
 	data, err := json.Marshal(payload)
 	if err != nil {
-		http.Error(w, "Error encoding data", http.StatusInternalServerError)
+		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Println("payload", string(data))
-
-	// Send to all clients
-	clientsMu.Lock()
-	for client := range clients {
-		select {
-		case client <- string(data):
-		default:
-			// if client is slow or closed
-			delete(clients, client)
-			close(client)
-		}
-	}
-	clientsMu.Unlock()
+	log.Println("Broadcasting payload:", string(data))
+	s.Broadcast(string(data))
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func main() {
+	server := NewSSEServer()
+
+	http.Handle("/events", server)
+	http.HandleFunc("/publish", server.HandlePublish)
+
+	log.Println("Listening on :8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }

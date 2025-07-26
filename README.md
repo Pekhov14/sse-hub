@@ -1,4 +1,7 @@
-# sse-hub — A lightweight pub/sub hub for Server-Sent Events
+# SSE-HUB — A lightweight pub/sub hub for Server-Sent Events
+
+![sse-hub](https://github.com/user-attachments/assets/5cbb229a-3518-4064-8218-2b5c4d0bad2e)
+
 
 Send and receive real-time updates without writing any SSE server-side logic — just POST to `sse-hub` to publish, and connect to it to subscribe.
 

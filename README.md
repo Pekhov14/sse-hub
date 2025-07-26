@@ -1,4 +1,8 @@
-### How to use in frontend
+# sse-hub — A lightweight pub/sub hub for Server-Sent Events
+
+Send and receive real-time updates without writing any SSE server-side logic — just POST to `sse-hub` to publish, and connect to it to subscribe.
+
+ How to use in frontend
 
 ```html
 <!DOCTYPE html>

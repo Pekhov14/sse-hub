@@ -1,3 +1,6 @@
+### How to use in frontend
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,3 +33,4 @@
     </script>
 </body>
 </html>
+```

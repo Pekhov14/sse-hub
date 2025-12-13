@@ -2,79 +2,78 @@
 
 ![sse-hub](https://github.com/user-attachments/assets/5cbb229a-3518-4064-8218-2b5c4d0bad2e)
 
-
 Send and receive real-time updates without writing any SSE server-side logic — just POST to `sse-hub` to publish, and connect to it to subscribe.
 
-Run sse-hub
-`./sse-hub`
+## Quick Start
 
-How to use in frontend
+Run sse-hub:
+```bash
+./sse-hub
+```
+
+## Configuration
+
+Configure via environment variables:
+
+- `PORT` - Server port (default: 8080)
+- `CLIENT_BUFFER` - Message buffer size per client (default: 10)
+- `CORS_ORIGIN` - CORS origin (default: *)
+
+**CLIENT_BUFFER explained:**
+Each connected client has a message buffer. If a client is slow (poor connection, browser lag), messages queue in this buffer. When full, the server drops messages or disconnects the client. Larger buffer = more tolerance for slow clients but uses more memory.
+
+Example:
+```bash
+PORT=3000 CLIENT_BUFFER=50 ./sse-hub
+```
+
+## 🎯 Live Demo
+
+Open `docs/examples/frontend/demo.html` in your browser for an interactive demo showcasing:
+
+- **📊 System Monitoring** - Real-time server metrics (CPU, memory, users)
+- **🔔 Notifications** - Push alerts and system notifications  
+- **💬 Live Chat** - Real-time messaging
+- **🔗 Connection Test** - Basic SSE functionality testing
+
+### Quick Demo Setup
+
+1. **Start the server:**
+   ```bash
+   PORT=8090 go run cmd/server/main.go
+   ```
+
+2. **Open the demo:**
+   ```bash
+   open docs/examples/frontend/demo.html
+   ```
+
+3. **Click "Connect to SSE" and test the features!**
+
+4. **Generate test data (optional):**
+   ```bash
+   php docs/examples/backend/php/demo_publisher.php
+   ```
+
+### Simple Frontend Example
 
 ```html
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>SSE Monitor</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            padding: 1rem;
-        }
-        .label {
-            font-weight: bold;
-        }
-        .value {
-            margin-left: 0.5rem;
-        }
-    </style>
+    <title>SSE Example</title>
 </head>
 <body>
-    <div>
-        <span class="label">Message:</span>
-        <span id="message" class="value">-</span>
-    </div>
-    <div>
-        <span class="label">Memory:</span>
-        <span id="mem" class="value">-</span>
-    </div>
-    <div>
-        <span class="label">CPU:</span>
-        <span id="cpu" class="value">-</span>
-    </div>
-
+    <div id="messages"></div>
+    
     <script>
-        (() => {
-            const eventSourceUrl = "http://127.0.0.1:8080/events";
-
-            const elements = {
-                message: document.getElementById("message"),
-                mem: document.getElementById("mem"),
-                cpu: document.getElementById("cpu"),
-            };
-
-            const updateUI = (data) => {
-                elements.message.textContent = data.message ?? "-";
-                elements.mem.textContent = data.mem ?? "-";
-                elements.cpu.textContent = data.cpu ?? "-";
-            };
-
-            const eventSource = new EventSource(eventSourceUrl);
-
-            eventSource.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    updateUI(data);
-                } catch (error) {
-                    console.error("Invalid JSON in SSE message:", error);
-                }
-            };
-
-            eventSource.onerror = (error) => {
-                console.error("SSE connection error:", error);
-            };
-        })();
+        const eventSource = new EventSource('http://localhost:8090/events');
+        
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            document.getElementById('messages').innerHTML += 
+                '<div>' + data.message + '</div>';
+        };
     </script>
 </body>
 </html>

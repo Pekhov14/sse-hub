@@ -1,52 +1,13 @@
-package main
+package sse
 
 import (
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 )
 
-type Client chan string
-
-type SSEServer struct {
-	clients   map[Client]bool
-	clientsMu sync.Mutex
-}
-
-func NewSSEServer() *SSEServer {
-	return &SSEServer{
-		clients: make(map[Client]bool),
-	}
-}
-
-func (s *SSEServer) AddClient(c Client) {
-	s.clientsMu.Lock()
-	defer s.clientsMu.Unlock()
-	s.clients[c] = true
-}
-
-func (s *SSEServer) RemoveClient(c Client) {
-	s.clientsMu.Lock()
-	defer s.clientsMu.Unlock()
-	delete(s.clients, c)
-	close(c)
-}
-
-func (s *SSEServer) Broadcast(msg string) {
-	s.clientsMu.Lock()
-	defer s.clientsMu.Unlock()
-	for client := range s.clients {
-		select {
-		case client <- msg:
-		default:
-			delete(s.clients, client)
-			close(client)
-		}
-	}
-}
-
+// ServeHTTP handles SSE connections on /events endpoint
 func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -54,20 +15,26 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Cache-Control")
+	w.Header().Set("Access-Control-Allow-Credentials", "false")
 
-	client := make(Client, 10)
+	// Create new client channel with configured buffer size
+	client := make(Client, s.clientBuffer)
 	s.AddClient(client)
 
+	// Handle client disconnect
 	ctx := r.Context()
 	go func() {
 		<-ctx.Done()
 		s.RemoveClient(client)
 	}()
 
+	// Send messages to client
 	for msg := range client {
 		_, err := fmt.Fprintf(w, "data: %s\n\n", msg)
 		if err != nil {
@@ -77,7 +44,19 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandlePublish handles message publishing on /publish endpoint
 func (s *SSEServer) HandlePublish(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Handle preflight OPTIONS request
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Use POST", http.StatusMethodNotAllowed)
 		return
@@ -95,18 +74,8 @@ func (s *SSEServer) HandlePublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("Broadcasting payload:", string(data))
+	log.Printf("Broadcasting to %d clients: %s", s.GetClientCount(), string(data))
 	s.Broadcast(string(data))
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func main() {
-	server := NewSSEServer()
-
-	http.Handle("/events", server)
-	http.HandleFunc("/publish", server.HandlePublish)
-
-	log.Println("Listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
 }

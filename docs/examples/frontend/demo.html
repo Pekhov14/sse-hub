@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>SSE-HUB Demo</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 1rem;
+            background: #f5f5f5;
+            margin: 0;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        
+        .connection-panel {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .demo-section {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .section-header {
+            background: #007bff;
+            color: white;
+            padding: 1rem;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        
+        .section-content {
+            padding: 1rem;
+        }
+        
+        .log-area {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            margin: 10px 0;
+            background: #f8f9fa;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .controls input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        
+        .controls button {
+            padding: 0.5rem 1rem;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 SSE-HUB Demo</h1>
+        
+        <div class="connection-panel">
+            <button class="btn-primary" onclick="connect()">Connect to SSE</button>
+            <button class="btn-secondary" onclick="clearAllLogs()">Clear All Logs</button>
+        </div>
+        
+        <div id="status" class="status disconnected">Click Connect to start</div>
+        
+        <div class="demo-grid">
+            <!-- Connection Test -->
+            <div class="demo-section">
+                <div class="section-header">🔗 Connection Test</div>
+                <div class="section-content">
+                    <div id="connectionLog" class="log-area">Ready to test connection...</div>
+                    <div class="controls">
+                        <button onclick="sendTestMessage()">Send Test Message</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- System Metrics -->
+            <div class="demo-section">
+                <div class="section-header">📊 System Metrics</div>
+                <div class="section-content">
+                    <div id="metricsLog" class="log-area">Waiting for metrics...</div>
+                    <div class="controls">
+                        <button onclick="sendMetrics()">Send Sample Metrics</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Live Chat -->
+            <div class="demo-section">
+                <div class="section-header">💬 Live Chat</div>
+                <div class="section-content">
+                    <div id="chatLog" class="log-area">Chat ready...</div>
+                    <div class="controls">
+                        <input type="text" id="chatInput" placeholder="Type message..." onkeypress="handleEnter(event)">
+                        <button onclick="sendChat()">Send</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Notifications -->
+            <div class="demo-section">
+                <div class="section-header">🔔 Notifications</div>
+                <div class="section-content">
+                    <div id="notificationLog" class="log-area">Ready for notifications...</div>
+                    <div class="controls">
+                        <input type="text" id="notificationInput" placeholder="Notification text...">
+                        <button onclick="sendNotification()">Send Alert</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let connected = false;
+
+        function log(message, logId = 'connectionLog') {
+            const logDiv = document.getElementById(logId);
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${time}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${logId}] ${message}`);
+        }
+
+        function updateStatus(message, isConnected) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${isConnected ? 'connected' : 'disconnected'}`;
+            connected = isConnected;
+        }
+
+        function connect() {
+            log('=== Starting connection ===');
+            
+            if (eventSource) {
+                log('Closing existing connection...');
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            const url = 'http://localhost:8090/events';
+            log(`Connecting to: ${url}`);
+            updateStatus('Connecting...', false);
+            
+            try {
+                eventSource = new EventSource(url);
+                log('EventSource object created');
+                
+                eventSource.onopen = function(e) {
+                    log('✅ SSE onopen event fired');
+                    updateStatus('Connected via onopen!', true);
+                };
+                
+                eventSource.onmessage = function(e) {
+                    // ИСПРАВЛЕНИЕ: Считаем соединение установленным при получении первого сообщения
+                    if (!connected) {
+                        log('✅ First message received - connection established!');
+                        updateStatus('Connected and working!', true);
+                    }
+                    
+                    log(`📨 Message: ${e.data}`);
+                    
+                    // Parse and route to appropriate log
+                    try {
+                        const data = JSON.parse(e.data);
+                        const type = data.type || 'test';
+                        
+                        switch(type) {
+                            case 'metrics':
+                                log(`📊 CPU: ${data.cpu}%, Memory: ${formatBytes(data.memory)}, Users: ${data.users}`, 'metricsLog');
+                                break;
+                            case 'chat':
+                                log(`💬 ${data.user}: ${data.message}`, 'chatLog');
+                                break;
+                            case 'notification':
+                                log(`🔔 ${data.title}: ${data.message}`, 'notificationLog');
+                                break;
+                            default:
+                                log(`📨 ${data.message || e.data}`, 'connectionLog');
+                        }
+                    } catch (err) {
+                        log(`📨 ${e.data}`, 'connectionLog');
+                    }
+                };
+                
+                eventSource.onerror = function(e) {
+                    log('❌ SSE connection error');
+                    updateStatus('Connection Error', false);
+                };
+                
+            } catch (error) {
+                log(`❌ Exception: ${error.message}`);
+                updateStatus('Connection Failed', false);
+            }
+        }
+
+        async function sendMessage(data) {
+            // ИСПРАВЛЕНИЕ: Убираем проверку connected - отправляем всегда как в minimal-test
+            try {
+                log(`📤 Sending: ${JSON.stringify(data)}`, 'connectionLog');
+                
+                const response = await fetch('http://localhost:8090/publish', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    log('✅ Message sent successfully', 'connectionLog');
+                } else {
+                    log(`❌ Send failed: ${response.status}`, 'connectionLog');
+                }
+                
+            } catch (error) {
+                log(`❌ Send error: ${error.message}`, 'connectionLog');
+            }
+        }
+
+        function sendTestMessage() {
+            sendMessage({
+                type: 'test',
+                message: 'Hello from fixed demo!',
+                timestamp: Date.now()
+            });
+        }
+
+        function sendMetrics() {
+            sendMessage({
+                type: 'metrics',
+                cpu: Math.floor(Math.random() * 100),
+                memory: Math.floor(Math.random() * 8000000000),
+                users: Math.floor(Math.random() * 10000),
+                requests: Math.floor(Math.random() * 1000),
+                timestamp: Date.now()
+            });
+        }
+
+        function sendChat() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text) return;
+            
+            sendMessage({
+                type: 'chat',
+                user: 'Demo User',
+                message: text,
+                timestamp: Date.now()
+            });
+            
+            input.value = '';
+        }
+
+        function sendNotification() {
+            const input = document.getElementById('notificationInput');
+            const text = input.value.trim();
+            if (!text) return;
+            
+            sendMessage({
+                type: 'notification',
+                title: 'Demo Alert',
+                message: text,
+                level: 'info',
+                timestamp: Date.now()
+            });
+            
+            input.value = '';
+        }
+
+        function handleEnter(event) {
+            if (event.key === 'Enter') {
+                sendChat();
+            }
+        }
+
+        function clearAllLogs() {
+            ['connectionLog', 'metricsLog', 'chatLog', 'notificationLog'].forEach(id => {
+                document.getElementById(id).innerHTML = 'Log cleared...';
+            });
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        // Auto-start
+        window.addEventListener('load', function() {
+            log('Fixed demo loaded. Click Connect, then send a message from another tab to test!');
+        });
+    </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -13,23 +13,19 @@ import (
 	"sse/internal/sse"
 )
 
-func main() {
-	// Load configuration
+// Run starts the SSE hub server.
+func Run() {
 	cfg := config.LoadConfig()
 
-	// Create SSE server with configured buffer size
 	server := sse.NewSSEServer(cfg.ClientBuffer)
 
-	// Setup routes
 	http.Handle("/events", server)
 	http.HandleFunc("/publish", server.HandlePublish)
 
-	// Create HTTP server
 	httpServer := &http.Server{
 		Addr: ":" + cfg.Port,
 	}
 
-	// Start server in goroutine
 	go func() {
 		log.Printf("Starting SSE server on port %s", cfg.Port)
 		log.Printf("Client buffer size: %d messages", cfg.ClientBuffer)
@@ -38,14 +34,12 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal for graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Println("Shutting down server gracefully...")
 
-	// Give server 10 seconds to finish current requests
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

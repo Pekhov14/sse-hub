@@ -2,377 +2,460 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>SSE-HUB Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SSE Hub Notification Read Demo</title>
     <style>
         body {
             font-family: sans-serif;
-            padding: 1rem;
-            background: #f5f5f5;
+            background: #f4f6f8;
             margin: 0;
+            padding: 2rem 1rem;
+            color: #1f2933;
         }
-        
+
         .container {
-            max-width: 1000px;
+            max-width: 860px;
             margin: 0 auto;
-            background: white;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
             padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        
+
         h1 {
-            color: #333;
-            margin-bottom: 1rem;
-            text-align: center;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
         }
-        
-        .connection-panel {
-            text-align: center;
-            margin-bottom: 2rem;
-            padding: 1rem;
-            background: #f8f9fa;
-            border-radius: 8px;
+
+        p {
+            color: #52606d;
         }
-        
+
+        .toolbar {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin: 1.5rem 0;
+        }
+
         button {
-            padding: 10px 20px;
-            margin: 5px;
-            font-size: 16px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        
-        .btn-primary {
-            background: #007bff;
-            color: white;
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        
-        .status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-            font-weight: bold;
-            text-align: center;
-        }
-        
-        .connected {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .disconnected {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .demo-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 2rem;
-            margin-top: 2rem;
-        }
-        
-        .demo-section {
-            border: 1px solid #dee2e6;
+            border: 0;
             border-radius: 8px;
+            padding: 0.8rem 1.1rem;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .primary {
+            background: #0f62fe;
+            color: #fff;
+        }
+
+        .secondary {
+            background: #d9e2ec;
+            color: #102a43;
+        }
+
+        .ghost {
+            background: #ffffff;
+            color: #102a43;
+            border: 1px solid #bcccdc;
+        }
+
+        .status {
+            padding: 0.9rem 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+        }
+
+        .status.connected {
+            background: #d9f99d;
+            color: #365314;
+        }
+
+        .status.disconnected {
+            background: #fecaca;
+            color: #7f1d1d;
+        }
+
+        .panel {
+            border: 1px solid #d9e2ec;
+            border-radius: 12px;
             overflow: hidden;
+            margin-bottom: 1.5rem;
         }
-        
-        .section-header {
-            background: #007bff;
-            color: white;
-            padding: 1rem;
-            font-size: 1.2rem;
-            font-weight: bold;
+
+        .panel-header {
+            background: #102a43;
+            color: #fff;
+            padding: 1rem 1.25rem;
+            font-weight: 700;
         }
-        
-        .section-content {
-            padding: 1rem;
+
+        .panel-body {
+            padding: 1.25rem;
         }
-        
-        .log-area {
-            border: 1px solid #ccc;
-            padding: 10px;
-            height: 200px;
-            overflow-y: auto;
-            margin: 10px 0;
-            background: #f8f9fa;
-            font-family: monospace;
-            font-size: 0.9rem;
-        }
-        
+
         .controls {
             display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        input, select {
+            flex: 1 1 180px;
+            padding: 0.8rem;
+            border-radius: 8px;
+            border: 1px solid #bcccdc;
+            font-size: 1rem;
+        }
+
+        .notifications {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .notification {
+            border-radius: 10px;
+            padding: 1rem;
+            border-left: 5px solid #0f62fe;
+            background: #f8fafc;
+        }
+
+        .notification.warning {
+            border-left-color: #d97706;
+        }
+
+        .notification.error {
+            border-left-color: #dc2626;
+        }
+
+        .notification.read {
+            opacity: 0.72;
+            border-left-color: #7b8794;
+        }
+
+        .notification-title {
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+        }
+
+        .notification-meta {
+            color: #7b8794;
+            font-size: 0.9rem;
+            margin-top: 0.4rem;
+        }
+
+        .notification-actions {
+            margin-top: 0.8rem;
+            display: flex;
             gap: 0.5rem;
-            margin-top: 1rem;
+            flex-wrap: wrap;
         }
-        
-        .controls input {
-            flex: 1;
-            padding: 0.5rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        
-        .controls button {
-            padding: 0.5rem 1rem;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
+
+        .log {
+            background: #111827;
+            color: #e5e7eb;
+            border-radius: 10px;
+            padding: 1rem;
+            min-height: 160px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            overflow: auto;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚀 SSE-HUB Demo</h1>
-        
-        <div class="connection-panel">
-            <button class="btn-primary" onclick="connect()">Connect to SSE</button>
-            <button class="btn-secondary" onclick="clearAllLogs()">Clear All Logs</button>
+        <h1>SSE Hub Notification Read Demo</h1>
+        <p>This demo shows a complete flow: SSE delivers a notification, then the frontend marks it as read through a normal HTTP POST.</p>
+
+        <div class="toolbar">
+            <button class="primary" onclick="connect()">Connect</button>
+            <button class="secondary" onclick="clearNotifications()">Clear Notifications</button>
+            <button class="secondary" onclick="clearLog()">Clear Log</button>
         </div>
-        
-        <div id="status" class="status disconnected">Click Connect to start</div>
-        
-        <div class="demo-grid">
-            <!-- Connection Test -->
-            <div class="demo-section">
-                <div class="section-header">🔗 Connection Test</div>
-                <div class="section-content">
-                    <div id="connectionLog" class="log-area">Ready to test connection...</div>
-                    <div class="controls">
-                        <button onclick="sendTestMessage()">Send Test Message</button>
+
+        <div id="status" class="status disconnected">Disconnected</div>
+
+        <div class="panel">
+            <div class="panel-header">Endpoints</div>
+            <div class="panel-body">
+                <div class="controls">
+                    <input id="sseUrlInput" type="text" value="http://localhost:8080" placeholder="SSE hub base URL" />
+                    <input id="readUrlInput" type="text" value="http://localhost:8081/read.php" placeholder="Read API URL" />
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">Send a Notification</div>
+            <div class="panel-body">
+                <div class="controls">
+                    <input id="idInput" type="text" value="notif-frontend-demo" placeholder="Notification id" />
+                    <input id="titleInput" type="text" value="System alert" placeholder="Notification title" />
+                    <select id="levelInput">
+                        <option value="info">info</option>
+                        <option value="warning">warning</option>
+                        <option value="error">error</option>
+                    </select>
+                </div>
+                <div class="controls">
+                    <input id="messageInput" type="text" value="A new notification was sent through SSE Hub." placeholder="Notification message" />
+                    <button class="primary" onclick="sendNotification()">Publish</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">Received Notifications</div>
+            <div class="panel-body">
+                <div id="notifications" class="notifications">
+                    <div class="notification">
+                        <div class="notification-title">Waiting for notifications</div>
+                        <div>Connect to the hub and publish a notification to see it appear here.</div>
                     </div>
                 </div>
             </div>
-            
-            <!-- System Metrics -->
-            <div class="demo-section">
-                <div class="section-header">📊 System Metrics</div>
-                <div class="section-content">
-                    <div id="metricsLog" class="log-area">Waiting for metrics...</div>
-                    <div class="controls">
-                        <button onclick="sendMetrics()">Send Sample Metrics</button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Live Chat -->
-            <div class="demo-section">
-                <div class="section-header">💬 Live Chat</div>
-                <div class="section-content">
-                    <div id="chatLog" class="log-area">Chat ready...</div>
-                    <div class="controls">
-                        <input type="text" id="chatInput" placeholder="Type message..." onkeypress="handleEnter(event)">
-                        <button onclick="sendChat()">Send</button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Notifications -->
-            <div class="demo-section">
-                <div class="section-header">🔔 Notifications</div>
-                <div class="section-content">
-                    <div id="notificationLog" class="log-area">Ready for notifications...</div>
-                    <div class="controls">
-                        <input type="text" id="notificationInput" placeholder="Notification text...">
-                        <button onclick="sendNotification()">Send Alert</button>
-                    </div>
-                </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">Connection and Read Log</div>
+            <div class="panel-body">
+                <div id="log" class="log"></div>
             </div>
         </div>
     </div>
 
     <script>
         let eventSource = null;
-        let connected = false;
+        const notificationMap = new Map();
 
-        function log(message, logId = 'connectionLog') {
-            const logDiv = document.getElementById(logId);
-            const time = new Date().toLocaleTimeString();
-            logDiv.innerHTML += `[${time}] ${message}<br>`;
-            logDiv.scrollTop = logDiv.scrollHeight;
-            console.log(`[${logId}] ${message}`);
+        function getSSEServerUrl() {
+            return document.getElementById('sseUrlInput').value.trim().replace(/\/$/, '');
         }
 
-        function updateStatus(message, isConnected) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${isConnected ? 'connected' : 'disconnected'}`;
-            connected = isConnected;
+        function getReadApiUrl() {
+            return document.getElementById('readUrlInput').value.trim();
+        }
+
+        function setStatus(text, connected) {
+            const status = document.getElementById('status');
+            status.textContent = text;
+            status.className = `status ${connected ? 'connected' : 'disconnected'}`;
+        }
+
+        function log(message) {
+            const logEl = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logEl.innerHTML += `[${time}] ${message}<br>`;
+            logEl.scrollTop = logEl.scrollHeight;
         }
 
         function connect() {
-            log('=== Starting connection ===');
-            
             if (eventSource) {
-                log('Closing existing connection...');
                 eventSource.close();
-                eventSource = null;
             }
-            
-            const url = 'http://localhost:8090/events';
-            log(`Connecting to: ${url}`);
-            updateStatus('Connecting...', false);
-            
-            try {
-                eventSource = new EventSource(url);
-                log('EventSource object created');
-                
-                eventSource.onopen = function(e) {
-                    log('✅ SSE onopen event fired');
-                    updateStatus('Connected via onopen!', true);
-                };
-                
-                eventSource.onmessage = function(e) {
-                    // ИСПРАВЛЕНИЕ: Считаем соединение установленным при получении первого сообщения
-                    if (!connected) {
-                        log('✅ First message received - connection established!');
-                        updateStatus('Connected and working!', true);
-                    }
-                    
-                    log(`📨 Message: ${e.data}`);
-                    
-                    // Parse and route to appropriate log
-                    try {
-                        const data = JSON.parse(e.data);
-                        const type = data.type || 'test';
-                        
-                        switch(type) {
-                            case 'metrics':
-                                log(`📊 CPU: ${data.cpu}%, Memory: ${formatBytes(data.memory)}, Users: ${data.users}`, 'metricsLog');
-                                break;
-                            case 'chat':
-                                log(`💬 ${data.user}: ${data.message}`, 'chatLog');
-                                break;
-                            case 'notification':
-                                log(`🔔 ${data.title}: ${data.message}`, 'notificationLog');
-                                break;
-                            default:
-                                log(`📨 ${data.message || e.data}`, 'connectionLog');
-                        }
-                    } catch (err) {
-                        log(`📨 ${e.data}`, 'connectionLog');
-                    }
-                };
-                
-                eventSource.onerror = function(e) {
-                    log('❌ SSE connection error');
-                    updateStatus('Connection Error', false);
-                };
-                
-            } catch (error) {
-                log(`❌ Exception: ${error.message}`);
-                updateStatus('Connection Failed', false);
-            }
+
+            const sseServerUrl = getSSEServerUrl();
+
+            log(`Connecting to ${sseServerUrl}/events`);
+            setStatus('Connecting...', false);
+
+            eventSource = new EventSource(`${sseServerUrl}/events`);
+
+            eventSource.onopen = function() {
+                setStatus('Connected', true);
+                log('SSE connection opened');
+            };
+
+            eventSource.onmessage = function(event) {
+                log(`Received raw event: ${event.data}`);
+
+                try {
+                    const payload = JSON.parse(event.data);
+                    renderNotification(payload);
+                } catch (error) {
+                    log(`Failed to parse event payload: ${error.message}`);
+                }
+            };
+
+            eventSource.onerror = function() {
+                setStatus('Connection error', false);
+                log('SSE connection error');
+            };
         }
 
-        async function sendMessage(data) {
-            // ИСПРАВЛЕНИЕ: Убираем проверку connected - отправляем всегда как в minimal-test
+        async function sendNotification() {
+            const sseServerUrl = getSSEServerUrl();
+            const payload = {
+                id: document.getElementById('idInput').value.trim() || `notif-${Date.now()}`,
+                type: 'notification',
+                title: document.getElementById('titleInput').value.trim() || 'System alert',
+                message: document.getElementById('messageInput').value.trim() || 'Notification sent',
+                level: document.getElementById('levelInput').value,
+                read: false,
+                timestamp: Date.now()
+            };
+
+            log(`Publishing notification ${payload.id}`);
+
             try {
-                log(`📤 Sending: ${JSON.stringify(data)}`, 'connectionLog');
-                
-                const response = await fetch('http://localhost:8090/publish', {
+                const response = await fetch(`${sseServerUrl}/publish`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(payload)
                 });
-                
-                if (response.ok) {
-                    log('✅ Message sent successfully', 'connectionLog');
-                } else {
-                    log(`❌ Send failed: ${response.status}`, 'connectionLog');
+
+                if (!response.ok) {
+                    log(`Publish failed with status ${response.status}`);
+                    return;
                 }
-                
+
+                log(`Notification ${payload.id} published`);
             } catch (error) {
-                log(`❌ Send error: ${error.message}`, 'connectionLog');
+                log(`Publish error: ${error.message}`);
             }
         }
 
-        function sendTestMessage() {
-            sendMessage({
-                type: 'test',
-                message: 'Hello from fixed demo!',
-                timestamp: Date.now()
-            });
+        function renderNotification(payload) {
+            if (!payload || payload.type !== 'notification') {
+                log('Ignored non-notification payload');
+                return;
+            }
+
+            if (!payload.id) {
+                log('Ignored notification without id');
+                return;
+            }
+
+            const container = document.getElementById('notifications');
+
+            if (container.children.length === 1 && container.textContent.includes('Waiting for notifications')) {
+                container.innerHTML = '';
+            }
+
+            let card = notificationMap.get(payload.id);
+            if (!card) {
+                card = createNotificationCard(payload);
+                notificationMap.set(payload.id, card);
+                container.prepend(card);
+            }
+
+            updateNotificationCard(card, payload);
         }
 
-        function sendMetrics() {
-            sendMessage({
-                type: 'metrics',
-                cpu: Math.floor(Math.random() * 100),
-                memory: Math.floor(Math.random() * 8000000000),
-                users: Math.floor(Math.random() * 10000),
-                requests: Math.floor(Math.random() * 1000),
-                timestamp: Date.now()
-            });
+        function createNotificationCard(payload) {
+            const item = document.createElement('div');
+            item.className = 'notification';
+
+            const title = document.createElement('div');
+            title.className = 'notification-title';
+
+            const message = document.createElement('div');
+            const meta = document.createElement('div');
+            meta.className = 'notification-meta';
+
+            const actions = document.createElement('div');
+            actions.className = 'notification-actions';
+
+            const markReadButton = document.createElement('button');
+            markReadButton.className = 'ghost';
+            markReadButton.textContent = 'Mark as read';
+            markReadButton.onclick = function() {
+                markAsRead(payload.id);
+            };
+
+            actions.appendChild(markReadButton);
+            item.appendChild(title);
+            item.appendChild(message);
+            item.appendChild(meta);
+            item.appendChild(actions);
+
+            item._title = title;
+            item._message = message;
+            item._meta = meta;
+            item._markReadButton = markReadButton;
+
+            return item;
         }
 
-        function sendChat() {
-            const input = document.getElementById('chatInput');
-            const text = input.value.trim();
-            if (!text) return;
-            
-            sendMessage({
-                type: 'chat',
-                user: 'Demo User',
-                message: text,
-                timestamp: Date.now()
-            });
-            
-            input.value = '';
+        function updateNotificationCard(card, payload) {
+            card.dataset.id = payload.id;
+            card.className = `notification ${payload.level || 'info'}${payload.read ? ' read' : ''}`;
+            card._title.textContent = payload.title || 'Notification';
+            card._message.textContent = payload.message || JSON.stringify(payload);
+            card._meta.textContent = `id=${payload.id} level=${payload.level || 'info'} read=${payload.read ? 'yes' : 'no'}`;
+            card._markReadButton.disabled = Boolean(payload.read);
+            card._markReadButton.textContent = payload.read ? 'Read' : 'Mark as read';
         }
 
-        function sendNotification() {
-            const input = document.getElementById('notificationInput');
-            const text = input.value.trim();
-            if (!text) return;
-            
-            sendMessage({
-                type: 'notification',
-                title: 'Demo Alert',
-                message: text,
-                level: 'info',
-                timestamp: Date.now()
-            });
-            
-            input.value = '';
-        }
+        async function markAsRead(id) {
+            const readApiUrl = getReadApiUrl();
+            const card = notificationMap.get(id);
+            if (!card) {
+                log(`Notification ${id} not found`);
+                return;
+            }
 
-        function handleEnter(event) {
-            if (event.key === 'Enter') {
-                sendChat();
+            log(`Sending read acknowledgement for ${id} to ${readApiUrl}`);
+
+            try {
+                const response = await fetch(readApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id,
+                        read: true,
+                        read_at: new Date().toISOString()
+                    })
+                });
+
+                if (!response.ok) {
+                    log(`Read acknowledgement failed with status ${response.status}`);
+                    return;
+                }
+
+                const result = await response.json();
+                log(`Read acknowledgement accepted for ${result.id}`);
+
+                updateNotificationCard(card, {
+                    id,
+                    title: card._title.textContent,
+                    message: card._message.textContent,
+                    level: card.classList.contains('warning') ? 'warning' : card.classList.contains('error') ? 'error' : 'info',
+                    read: true
+                });
+            } catch (error) {
+                log(`Read acknowledgement error: ${error.message}`);
             }
         }
 
-        function clearAllLogs() {
-            ['connectionLog', 'metricsLog', 'chatLog', 'notificationLog'].forEach(id => {
-                document.getElementById(id).innerHTML = 'Log cleared...';
-            });
+        function clearNotifications() {
+            notificationMap.clear();
+            document.getElementById('notifications').innerHTML = `
+                <div class="notification">
+                    <div class="notification-title">Waiting for notifications</div>
+                    <div>Connect to the hub and publish a notification to see it appear here.</div>
+                </div>
+            `;
         }
 
-        function formatBytes(bytes) {
-            if (!bytes) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
         }
 
-        // Auto-start
         window.addEventListener('load', function() {
-            log('Fixed demo loaded. Click Connect, then send a message from another tab to test!');
+            log('Connect to SSE, publish a notification, then mark it as read.');
+            log(`Default SSE hub URL: ${getSSEServerUrl()}`);
+            log(`Default read API URL: ${getReadApiUrl()}`);
         });
     </script>
 </body>

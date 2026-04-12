@@ -6,9 +6,24 @@ Send and receive real-time updates without writing any SSE server-side logic —
 
 ## Quick Start
 
-Run sse-hub:
+Build the binary:
+```bash
+make build
+```
+
+Show available commands:
 ```bash
 ./sse-hub
+```
+
+Start the server:
+```bash
+./sse-hub serve
+```
+
+Generate an API key placeholder for future `X-API-Key` support:
+```bash
+./sse-hub keygen
 ```
 
 ## Configuration
@@ -24,35 +39,48 @@ Each connected client has a message buffer. If a client is slow (poor connection
 
 Example:
 ```bash
-PORT=3000 CLIENT_BUFFER=50 ./sse-hub
+PORT=3000 CLIENT_BUFFER=50 ./sse-hub serve
 ```
 
-## 🎯 Live Demo
+## API Summary
 
-Open `docs/examples/frontend/demo.html` in your browser for an interactive demo showcasing:
+- `GET /events` opens an SSE stream
+- `POST /publish` broadcasts a JSON payload to all connected clients
 
-- **📊 System Monitoring** - Real-time server metrics (CPU, memory, users)
-- **🔔 Notifications** - Push alerts and system notifications  
-- **💬 Live Chat** - Real-time messaging
-- **🔗 Connection Test** - Basic SSE functionality testing
+Current behavior:
+- messages are broadcast to all connected clients
+- the server keeps no event history
+- there are no topics yet
+- `X-API-Key` authentication is not implemented yet
 
-### Quick Demo Setup
+See [docs/api.md](docs/api.md) for the current API description.
 
-1. **Start the server:**
+## Live Demo
+
+Open `docs/examples/frontend/demo.html` in your browser for a small demo focused on notifications and read acknowledgements.
+
+### Demo Setup
+
+1. Build the binary:
    ```bash
-   PORT=8090 go run cmd/server/main.go
+   make build
    ```
 
-2. **Open the demo:**
+2. Start the server:
    ```bash
-   open docs/examples/frontend/demo.html
+   ./sse-hub serve
    ```
 
-3. **Click "Connect to SSE" and test the features!**
-
-4. **Generate test data (optional):**
+3. Start the read API example:
    ```bash
-   php docs/examples/backend/php/demo_publisher.php
+   php -S localhost:8081 -t docs/examples/backend/php
+   ```
+
+4. Open `docs/examples/frontend/demo.html` in your browser.
+
+5. Publish a sample notification from PHP if needed:
+   ```bash
+   php docs/examples/backend/php/publisher.php
    ```
 
 ### Simple Frontend Example
@@ -64,65 +92,60 @@ Open `docs/examples/frontend/demo.html` in your browser for an interactive demo 
     <title>SSE Example</title>
 </head>
 <body>
-    <div id="messages"></div>
+    <div id="notifications"></div>
     
     <script>
-        const eventSource = new EventSource('http://localhost:8090/events');
+        const eventSource = new EventSource('http://localhost:8080/events');
         
         eventSource.onmessage = function(event) {
             const data = JSON.parse(event.data);
-            document.getElementById('messages').innerHTML += 
-                '<div>' + data.message + '</div>';
+            if (data.type === 'notification') {
+                document.getElementById('notifications').innerHTML +=
+                    '<div>' + data.title + ': ' + data.message + '</div>';
+            }
         };
     </script>
 </body>
 </html>
 ```
 
-How to use in backend (example in php)
+How to publish a notification from backend (example in PHP)
 
 ```php
-<?php declare(strict_types=1);
+<?php
 
-set_time_limit(0);
+$payload = [
+    'id' => 'notif-1001',
+    'type' => 'notification',
+    'title' => 'Order created',
+    'message' => 'Order #12345 is ready for processing',
+    'level' => 'info',
+    'read' => false,
+    'timestamp' => time(),
+];
 
+$ch = curl_init('http://127.0.0.1:8080/publish');
 
-function publishSseMessage(int $index): void
-{
-    $data = [
-        'message' => 'SSE message ' . $index,
-        'mem'     => memory_get_usage(),
-        'cpu'     => sys_getloadavg()[0],
-    ];
+curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+    CURLOPT_POSTFIELDS => json_encode($payload, JSON_THROW_ON_ERROR),
+]);
 
-    $ch = curl_init('http://127.0.0.1:8080/publish');
+$response = curl_exec($ch);
 
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-        CURLOPT_POSTFIELDS     => json_encode($data, JSON_THROW_ON_ERROR),
-    ]);
-
-    $response = curl_exec($ch);
-
-    if ($response === false) {
-        fwrite(STDERR, 'cURL error: ' . curl_error($ch) . PHP_EOL);
-    }
-
-    curl_close($ch);
+if ($response === false) {
+    fwrite(STDERR, 'cURL error: ' . curl_error($ch) . PHP_EOL);
 }
 
-function run(): void
-{
-    $iterations = 1_000_000;
-
-    for ($i = 0; $i < $iterations; $i++) {
-        sleep(1);
-        publishSseMessage($i);
-    }
-}
-
-run();
+curl_close($ch);
 
 ```
+
+## Project Layout
+
+- `cmd/` — CLI entrypoint and commands
+- `internal/config/` — environment configuration
+- `internal/sse/` — SSE server and HTTP handlers
+- `docs/` — API notes, examples, and release planning

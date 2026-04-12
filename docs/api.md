@@ -1,20 +1,16 @@
-# SSE Server API Documentation
+# SSE Hub API Documentation
 
 ## Overview
 
-The SSE server provides two main endpoints for real-time communication:
+The current SSE hub provides two endpoints for real-time communication:
 - `/events` - Server-Sent Events stream for clients
 - `/publish` - HTTP endpoint for publishing messages
 
-## Authentication
-
-Authentication is optional and controlled by the `API_KEY` environment variable.
-
-### Methods
-1. **Query Parameter**: `?key=your-api-key`
-2. **HTTP Header**: `X-API-Key: your-api-key`
-
-If no API key is configured, the server runs without authentication.
+Current implementation notes:
+- all messages are broadcast to all connected clients
+- topics are not implemented yet
+- message history and replay are not implemented
+- `X-API-Key` authentication is planned, but not implemented yet
 
 ## Endpoints
 
@@ -28,10 +24,6 @@ Establishes a Server-Sent Events connection for receiving real-time messages.
 - `Connection: keep-alive`
 - `Access-Control-Allow-Origin: *`
 
-**Authentication:**
-- Query parameter: `GET /events?key=your-api-key`
-- Not required if API key is not configured
-
 **Response Format:**
 ```
 data: {"message": "Hello", "timestamp": 1234567890}
@@ -42,7 +34,7 @@ data: {"type": "notification", "title": "Alert", "message": "Something happened"
 
 **Example:**
 ```javascript
-const eventSource = new EventSource('/events?key=your-api-key');
+const eventSource = new EventSource('http://localhost:8090/events');
 
 eventSource.onmessage = function(event) {
     const data = JSON.parse(event.data);
@@ -59,10 +51,6 @@ eventSource.onerror = function(event) {
 Publishes a message to all connected clients.
 
 **Content-Type:** `application/json`
-
-**Authentication:**
-- Header: `X-API-Key: your-api-key`
-- Not required if API key is not configured
 
 **Request Body:**
 Any valid JSON object. Common patterns:
@@ -86,17 +74,15 @@ Any valid JSON object. Common patterns:
 **Response:**
 - **204 No Content** - Message published successfully
 - **400 Bad Request** - Invalid JSON in request body
-- **401 Unauthorized** - Invalid or missing API key
 - **405 Method Not Allowed** - Non-POST request
 - **500 Internal Server Error** - Server error
 
 **Example:**
 ```javascript
-fetch('/publish', {
+fetch('http://localhost:8090/publish', {
     method: 'POST',
     headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': 'your-api-key'
+        'Content-Type': 'application/json'
     },
     body: JSON.stringify({
         message: 'Hello from client',
@@ -114,11 +100,10 @@ The server is configured via environment variables:
 | `PORT` | `8080` | Server port |
 | `CLIENT_BUFFER` | `10` | Message buffer size per client |
 | `CORS_ORIGIN` | `*` | CORS allowed origin |
-| `API_KEY` | `` | API key for authentication (optional) |
 
 **Example:**
 ```bash
-PORT=3000 CLIENT_BUFFER=20 API_KEY=secret123 go run cmd/server/main.go
+PORT=3000 CLIENT_BUFFER=20 ./sse-hub serve
 ```
 
 ## Message Flow
@@ -133,12 +118,10 @@ PORT=3000 CLIENT_BUFFER=20 API_KEY=secret123 go run cmd/server/main.go
 
 ### Client-Side Errors
 - **Connection Failed**: Check server URL and network connectivity
-- **Authentication Failed**: Verify API key is correct
 - **Message Parse Error**: Ensure server sends valid JSON
 
 ### Server-Side Errors
 - **Invalid JSON**: Request body must be valid JSON
-- **Authentication Error**: API key missing or incorrect
 - **Client Buffer Full**: Client removed if message buffer overflows
 
 ## Best Practices
@@ -146,19 +129,14 @@ PORT=3000 CLIENT_BUFFER=20 API_KEY=secret123 go run cmd/server/main.go
 ### Client Implementation
 ```javascript
 class SSEClient {
-    constructor(url, apiKey) {
+    constructor(url) {
         this.url = url;
-        this.apiKey = apiKey;
         this.eventSource = null;
         this.reconnectDelay = 1000;
     }
     
     connect() {
-        const url = this.apiKey ? 
-            `${this.url}/events?key=${this.apiKey}` : 
-            `${this.url}/events`;
-            
-        this.eventSource = new EventSource(url);
+        this.eventSource = new EventSource(`${this.url}/events`);
         
         this.eventSource.onopen = () => {
             console.log('Connected');
@@ -203,23 +181,16 @@ class SSEClient {
 ### Publisher Implementation
 ```javascript
 class SSEPublisher {
-    constructor(url, apiKey) {
+    constructor(url) {
         this.url = url;
-        this.apiKey = apiKey;
     }
     
     async publish(data) {
-        const headers = {
-            'Content-Type': 'application/json'
-        };
-        
-        if (this.apiKey) {
-            headers['X-API-Key'] = this.apiKey;
-        }
-        
         const response = await fetch(`${this.url}/publish`, {
             method: 'POST',
-            headers,
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify(data)
         });
         
@@ -235,4 +206,4 @@ class SSEPublisher {
 - **Memory Usage**: Each client uses ~10KB memory (configurable buffer)
 - **Connection Limits**: OS-dependent, typically 1000+ concurrent connections
 - **Message Throughput**: Depends on message size and client count
-- **Load Balancing**: Use sticky sessions or shared state (Redis) for multiple instances
+- **Load Balancing**: Multi-instance fan-out is not implemented yet

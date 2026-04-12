@@ -1,14 +1,14 @@
-# PHP Examples for SSE Server
+# PHP Examples for SSE Hub
 
-This directory contains PHP examples for integrating with the SSE server.
+This directory contains a minimal PHP pair for a complete notification flow.
 
 ## Files
 
 ### `publisher.php`
-Basic publisher class with examples of different message types.
+Basic notification publisher for the `/publish` endpoint.
 
-### `stress_test.php`
-Stress testing script that sends continuous messages with system metrics.
+### `read.php`
+Small endpoint that accepts read acknowledgements from the frontend.
 
 ## Usage
 
@@ -17,101 +17,39 @@ Stress testing script that sends continuous messages with system metrics.
 php publisher.php
 ```
 
-### Stress Test
+### Read API
 ```bash
-# Start SSE server first
-PORT=8090 go run cmd/server/main.go
-
-# In another terminal, run stress test
-php stress_test.php
+php -S localhost:8081 -t docs/examples/backend/php
 ```
 
 ### Monitor Results
-Open `docs/examples/frontend/monitor.html` in your browser to see real-time updates.
+Open `docs/examples/frontend/demo.html` in your browser to see real-time updates.
 
-## Example Integration
+## Notification Example
 
-### Laravel Integration
 ```php
-// In a Laravel controller
-use App\Services\SSEPublisher;
+$publisher = new SSEPublisher('http://localhost:8080');
+$publisher->publish([
+    'id' => 'notif-1001',
+    'type' => 'notification',
+    'title' => 'Order created',
+    'message' => 'Order #12345 is ready for processing',
+    'level' => 'info',
+    'read' => false,
+    'timestamp' => time(),
+]);
+```
 
-class OrderController extends Controller 
+## Read Receipt Example
+
+```php
+POST /read.php
 {
-    public function store(Request $request) 
-    {
-        $order = Order::create($request->validated());
-        
-        // Notify via SSE
-        $publisher = new SSEPublisher('http://localhost:8090');
-        $publisher->publish([
-            'type' => 'new_order',
-            'order_id' => $order->id,
-            'customer' => $order->customer_name,
-            'amount' => $order->total,
-            'timestamp' => time()
-        ]);
-        
-        return response()->json($order);
-    }
+    "id": "notif-1001",
+    "read": true,
+    "read_at": "2026-04-12T12:00:00Z"
 }
 ```
-
-### WordPress Plugin
-```php
-// In a WordPress plugin
-add_action('wp_insert_post', function($post_id) {
-    if (get_post_type($post_id) === 'product') {
-        $publisher = new SSEPublisher('http://localhost:8090');
-        $publisher->publish([
-            'type' => 'new_product',
-            'product_id' => $post_id,
-            'title' => get_the_title($post_id),
-            'timestamp' => time()
-        ]);
-    }
-});
-```
-
-### Symfony Integration
-```php
-// In a Symfony service
-use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-
-class SSENotificationSubscriber implements EventSubscriberInterface
-{
-    private SSEPublisher $publisher;
-    
-    public function __construct(SSEPublisher $publisher) 
-    {
-        $this->publisher = $publisher;
-    }
-    
-    public function onUserRegistered(UserRegisteredEvent $event): void
-    {
-        $this->publisher->publish([
-            'type' => 'user_registered',
-            'user_id' => $event->getUser()->getId(),
-            'email' => $event->getUser()->getEmail(),
-            'timestamp' => time()
-        ]);
-    }
-    
-    public static function getSubscribedEvents(): array
-    {
-        return [
-            UserRegisteredEvent::class => 'onUserRegistered',
-        ];
-    }
-}
-```
-
-## Performance Tips
-
-1. **Connection Pooling**: Reuse cURL handles for multiple requests
-2. **Async Publishing**: Use ReactPHP or Swoole for non-blocking requests
-3. **Error Handling**: Always handle cURL errors gracefully
-4. **Timeouts**: Set appropriate timeouts for production use
 
 ## Error Handling
 
@@ -121,7 +59,7 @@ function publishWithRetry($data, $maxRetries = 3) {
     
     while ($attempt < $maxRetries) {
         try {
-            $publisher = new SSEPublisher('http://localhost:8090');
+            $publisher = new SSEPublisher('http://localhost:8080');
             $publisher->publish($data);
             return true;
         } catch (Exception $e) {

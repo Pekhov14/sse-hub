@@ -1,138 +1,74 @@
-# SSE Server Examples
+# SSE Hub Examples
 
-This directory contains practical examples of how to use the SSE server in different scenarios.
+This directory contains one complete, canonical example of how to use the current SSE hub.
 
 ## Frontend Examples
 
-### HTML/JavaScript Client (`frontend/`)
-A complete web interface for testing the SSE server:
-- Real-time connection to SSE server
-- Message publishing interface
-- Authentication support
-- Message history display
+### HTML/JavaScript Demo (`frontend/demo.html`)
+A minimal web interface focused on one use case:
+- connect to the SSE hub
+- publish a notification with an `id`
+- receive and render notifications in real time
+- mark a notification as read with a normal HTTP POST
 
 **Usage:**
-1. Start the SSE server: `go run cmd/server/main.go`
-2. Open `frontend/index.html` in your browser
-3. Connect to `http://localhost:8090`
-4. Send and receive messages in real-time
+1. Build the binary: `make build`
+2. Start the SSE hub: `./sse-hub serve`
+3. Start the read API example: `php -S localhost:8081 -t docs/examples/backend/php`
+4. Open `frontend/demo.html` in your browser
+5. Connect to `http://localhost:8080`
+6. Publish, receive, and mark notifications as read
 
 ## Backend Examples
 
 ### PHP Publisher (`backend/php/`)
-Shows how to send messages from PHP applications:
-- Simple message publishing
-- Error handling
-- Web form integration
-- Multiple message types
+Shows the same notification flow from a backend script:
+- build a notification payload
+- include a stable notification `id`
+- send it to `POST /publish`
+- handle publish errors
+
+### PHP Read API (`backend/php/read.php`)
+Receives the read acknowledgement from the frontend:
+- accepts a notification `id`
+- returns a JSON confirmation
+- demonstrates that user actions go back through normal HTTP, not SSE
 
 **Usage:**
 ```bash
-php backend/php/publisher.php
+php docs/examples/backend/php/publisher.php
 ```
 
-### Node.js Publisher (`backend/nodejs/`)
-Demonstrates Node.js integration:
-- Promise-based API
-- Express.js middleware
-- Periodic updates
-- Real-time metrics
+## Canonical Payload
 
-**Usage:**
-```bash
-node backend/nodejs/publisher.js
-```
+Use this payload shape as the simplest starting point:
 
-## Common Use Cases
-
-### 1. Real-time Notifications
 ```javascript
-// Send notification
 await publisher.publish({
+    id: 'notif-1001',
     type: 'notification',
-    title: 'New Message',
-    message: 'You have a new message from John',
-    user_id: 123
-});
-```
-
-### 2. Live Updates
-```javascript
-// Send data update
-await publisher.publish({
-    type: 'data_update',
-    table: 'orders',
-    action: 'created',
-    record_id: 456
-});
-```
-
-### 3. System Monitoring
-```javascript
-// Send system status
-await publisher.publish({
-    type: 'system_status',
-    service: 'database',
-    status: 'healthy',
-    response_time: 45
-});
-```
-
-### 4. Chat Messages
-```javascript
-// Send chat message
-await publisher.publish({
-    type: 'chat',
-    room: 'general',
-    user: 'alice',
-    message: 'Hello everyone!'
-});
-```
-
-## Authentication
-
-If your SSE server uses API key authentication:
-
-**Environment variable:**
-```bash
-API_KEY=your-secret-key go run cmd/server/main.go
-```
-
-**Client connection:**
-```javascript
-const eventSource = new EventSource('/events?key=your-secret-key');
-```
-
-**Publishing with key:**
-```javascript
-fetch('/publish', {
-    method: 'POST',
-    headers: {
-        'X-API-Key': 'your-secret-key',
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(data)
+    title: 'New order',
+    message: 'Order #12345 is ready for processing',
+    level: 'info',
+    read: false,
+    timestamp: Date.now()
 });
 ```
 
 ## Testing
 
 ### Quick Test
-1. Start the SSE server: `PORT=8090 go run cmd/server/main.go`
-2. Open `frontend/monitor.html` in your browser
-3. Run stress test: `php backend/php/stress_test.php`
-4. Watch real-time system metrics in the browser
-
-### Full Test Suite
-1. Start the SSE server
-2. Open the frontend example in your browser
-3. Run one of the backend examples
-4. Watch messages appear in real-time in the browser
+1. Start the SSE hub: `./sse-hub serve`
+2. Start the read API example: `php -S localhost:8081 -t docs/examples/backend/php`
+3. Open `docs/examples/frontend/demo.html` in your browser
+4. Run `php docs/examples/backend/php/publisher.php`
+5. Watch the notification appear in the browser
+6. Click `Mark as read` and watch the read acknowledgement in the log
 
 ## Integration Tips
 
 - **Error Handling**: Always wrap publish calls in try-catch blocks
 - **Reconnection**: Implement client-side reconnection logic for production
-- **Message Format**: Use consistent message structure across your application
-- **Performance**: Consider message frequency and client count for scaling
-- **Security**: Use API keys in production environments
+- **Message Format**: Give notifications an `id` if the frontend will act on them
+- **Directionality**: Use SSE for delivery and normal HTTP for user actions such as read acknowledgements
+- **Security**: Add authentication before exposing `/publish` publicly
